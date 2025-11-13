@@ -7,7 +7,8 @@
     body { margin:0; background:#071827; color:#cfe9ff; font-family:sans-serif; overflow:hidden; }
     #intro { position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#071827; text-align:center; padding:20px; }
     #intro img { max-width:20%; border:4px solid #2aa1c3; cursor:pointer; margin-bottom:20px; }
-    #intro button { margin-top:20px; padding:12px 24px; font-size:16px; background:#1e5a6d; color:white; border:2px solid #88d2e8; cursor:pointer; }
+    #intro button { margin-top:20px; padding:12px 24px; font-size:16px; background:#1e5a6d; color:white; border:2px solid #88d2e8; cursor:pointer; border-radius:25px; transition:all 0.3s ease; }
+    #intro button:hover { transform:scale(1.1); box-shadow:0 0 15px #88d2e8; }
     #canvas { display:block; margin:0 auto; background:#071827; }
     #panel { position:fixed; right:0; top:0; bottom:0; width:300px; background:#0f2a3b; padding:12px; display:none; overflow-y:auto; }
     #stemPanel { position:fixed; left:0; top:0; bottom:0; width:140px; background:#0f2a3b; padding:12px; display:none; flex-direction:column; align-items:center; }
@@ -15,9 +16,9 @@
     .stemControl label { margin-bottom:6px; font-size:12px; }
     #stemPanel input[type=range] { writing-mode: bt-lr; -webkit-appearance: slider-vertical; width:20px; height:150px; }
     #preview { margin-top:12px; max-width:100%; border:2px solid #2aa1c3; }
-    #homeBtn { position:fixed; bottom:20px; left:20px; padding:12px 24px; background:#1e5a6d; color:white; border:2px solid #88d2e8; cursor:pointer; display:none; }
+    #homeBtn { position:fixed; bottom:20px; left:20px; padding:12px 24px; background:#1e5a6d; color:white; border:2px solid #88d2e8; cursor:pointer; display:none; border-radius:25px; }
     #cameraFeed { display:none; margin-top:10px; max-width:100%; border:2px solid #2aa1c3; }
-    .pad { background:#2aa1c3; color:#071827; padding:16px; text-align:center; cursor:pointer; font-weight:bold; border-radius:6px; margin:5px 0; }
+    .pad { background:#2aa1c3; color:#071827; padding:16px; text-align:center; cursor:pointer; font-weight:bold; border-radius:6px; margin:5px 0; transition:all 0.2s ease; }
     .pad:active { background:#88d2e8; }
     .sectionLabel { font-size:13px; margin-top:12px; color:#cfe9ff; }
     #infoBtn { font-family:Helvetica; font-size:12pt; margin-top:10px; }
@@ -85,8 +86,22 @@
 const canvas=document.getElementById("canvas"),ctx=canvas.getContext("2d");
 const W=canvas.width,H=canvas.height;let cx=W/2,cy=H/2;let running=false;
 let images=[],positions=[],A=40,B=12,STEP=0.36,breathePhase=0,radiusFactor=1.2;
-for(let i=1;i<=30;i++){const img=new Image();img.src=`assets/mamma_photo${i}.jpg`;images.push(img);}
-function recomputeSpiral(){positions=[];let theta=0;for(let i=0;i<images.length;i++){const r=A+B*theta;positions.push({ang:theta,rbase:r,phase:Math.random()*Math.PI*2,opacity:0,x:null,y:null});theta+=STEP;}}
+
+// preload images
+for(let i=1;i<=30;i++){
+  const img=new Image();
+  img.src=`assets/mamma_photo${i}.jpg`;
+  images.push(img);
+}
+
+function recomputeSpiral(){
+  positions=[];let theta=0;
+  for(let i=0;i<images.length;i++){
+    const r=A+B*theta;
+    positions.push({ang:theta,rbase:r,phase:Math.random()*Math.PI*2,opacity:0,x:null,y:null});
+    theta+=STEP;
+  }
+}
 function gradualLoad(){positions.forEach(p=>p.opacity=0);}
 function drawBackground(){ctx.fillStyle="#071827";ctx.fillRect(0,0,W,H);}
 function drawClock(){ctx.fillStyle="#cfe9ff";ctx.font="20px monospace";ctx.textAlign="center";ctx.fillText(new Date().toLocaleTimeString(),cx,40);}
@@ -99,14 +114,17 @@ function draw(){
     const r=(s.rbase*(radiusFactor+breathe))+6*Math.sin(s.phase);
     const x=cx+r*Math.cos(s.ang), y=cy+r*Math.sin(s.ang);
     if(images[i].complete){
-      if(s.opacity<1) s.opacity+=0.02;
+            if(s.opacity<1) s.opacity+=0.02;
       ctx.globalAlpha=s.opacity;
       ctx.drawImage(images[i],x-48,y-36,96,72);
-      ctx.globalAlpha=1.0; s.x=x; s.y=y;
+      ctx.globalAlpha=1.0; 
+      s.x=x; s.y=y;
     }
   }
   requestAnimationFrame(draw);
 }
+
+// click detection on spiral images
 canvas.addEventListener("click", e=>{
   const rect=canvas.getBoundingClientRect();
   const mx=e.clientX-rect.left, my=e.clientY-rect.top;
@@ -250,7 +268,6 @@ closeCameraBtn.addEventListener("click",()=>{
 let recorder,chunks=[];
 document.getElementById("recordBtn").addEventListener("click",()=>{
   const dest=audioCtx.createMediaStreamDestination();
-  // connect all stems to recorder
   stems.forEach(s=>s.gain.connect(dest));
   recorder=new MediaRecorder(dest.stream);
   recorder.ondataavailable=e=>chunks.push(e.data);
@@ -290,7 +307,7 @@ function enterGallery(){
   document.getElementById("panel").style.display="block";
   document.getElementById("stemPanel").style.display="flex";
   homeBtn.style.display="block";
-  running=true; recomputeSpiral();  running=true; 
+  running=true; 
   recomputeSpiral(); 
   gradualLoad(); 
   draw();
@@ -300,3 +317,4 @@ document.querySelector("#intro img").addEventListener("click",enterGallery);
 </script>
 </body>
 </html>
+
