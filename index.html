@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Mammina Sound Archive</title>
+  <style>
+    body { margin:0; background:#071827; color:#cfe9ff; font-family:sans-serif; overflow:hidden; }
+    #intro { position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#071827; text-align:center; padding:20px; }
+    #intro img { max-width:20%; border:4px solid #2aa1c3; cursor:pointer; margin-bottom:20px; }
+    #intro button { margin-top:20px; padding:12px 24px; font-size:16px; background:#1e5a6d; color:white; border:2px solid #88d2e8; cursor:pointer; }
+    #canvas { display:block; margin:0 auto; background:#071827; }
+    #panel { position:fixed; right:0; top:0; bottom:0; width:300px; background:#0f2a3b; padding:12px; display:none; overflow-y:auto; }
+    #stemPanel { position:fixed; left:0; top:0; bottom:0; width:140px; background:#0f2a3b; padding:12px; display:none; flex-direction:column; align-items:center; }
+    .stemControl { display:flex; flex-direction:column; align-items:center; margin:10px 0; }
+    .stemControl label { margin-bottom:6px; font-size:12px; }
+    #stemPanel input[type=range] { writing-mode: bt-lr; -webkit-appearance: slider-vertical; width:20px; height:150px; }
+    #preview { margin-top:12px; max-width:100%; border:2px solid #2aa1c3; }
+    #homeBtn { position:fixed; bottom:20px; left:20px; padding:12px 24px; background:#1e5a6d; color:white; border:2px solid #88d2e8; cursor:pointer; display:none; }
+    #cameraFeed { display:none; margin-top:10px; max-width:100%; border:2px solid #2aa1c3; }
+    .pad { background:#2aa1c3; color:#071827; padding:16px; text-align:center; cursor:pointer; font-weight:bold; border-radius:6px; margin:5px 0; }
+    .pad:active { background:#88d2e8; }
+    .sectionLabel { font-size:13px; margin-top:12px; color:#cfe9ff; }
+    #infoBtn { font-family:Helvetica; font-size:12pt; margin-top:10px; }
+    #infoBox { display:none; position:fixed; top:20%; left:30%; width:40%; background:#fff; color:#000; padding:20px; border:2px solid #071827; font-family:Helvetica; font-size:12pt; }
+  </style>
+</head>
+<body>
+  <div id="intro">
+    <img src="assets/mamma_intro.jpg" alt="Mammina portrait" />
+    <h1>Mammina Project</h1>
+    <p>Interactive sound archive dedicated to my mother. Click to enter.</p>
+    <button id="enterBtn">CLICK TO ENTER</button>
+  </div>
+
+  <canvas id="canvas" width="1200" height="800"></canvas>
+
+  <!-- Stem Player -->
+  <div id="stemPanel">
+    <div class="stemControl"><label>Bass</label><input type="range" id="stem1" min="0" max="1" step="0.01" value="0.25"></div>
+    <div class="stemControl"><label>Synth</label><input type="range" id="stem2" min="0" max="1" step="0.01" value="0.25"></div>
+    <div class="stemControl"><label>Pad</label><input type="range" id="stem3" min="0" max="1" step="0.01" value="0.25"></div>
+    <div class="stemControl"><label>Voice</label><input type="range" id="stem4" min="0" max="1" step="0.01" value="0.25"></div>
+  </div>
+
+  <!-- Right Panel -->
+  <div id="panel">
+    <h2>TO REVISIT</h2>
+    <div id="meta">Click a spiral image</div>
+    <img id="preview" alt="Selected preview"/>
+    <div class="sectionLabel">Sort by</div>
+    <select id="sortSelect">
+      <option value="name">Name</option>
+      <option value="reverse">Reverse</option>
+      <option value="newest">Newest</option>
+    </select>
+    <div class="sectionLabel">Spiral radius</div>
+    <input type="range" id="radiusSlider" min="0.5" max="2.0" step="0.01" value="1.2">
+    <div class="sectionLabel">Upload image</div>
+    <input type="file" id="uploadInput" accept="image/*">
+    <div class="sectionLabel">Camera</div>
+    <button id="cameraBtn">OPEN CAMERA</button>
+    <button id="closeCameraBtn" style="display:none;">CLOSE CAMERA</button>
+    <video id="cameraFeed" autoplay playsinline></video>
+    <div class="sectionLabel">Drum pad (keys 1-2-3)</div>
+    <div id="drumPad">
+      <div class="pad" data-sound="kick">Kick (1)</div>
+      <div class="pad" data-sound="snare">Snare (2)</div>
+      <div class="pad" data-sound="hihat">HiHat (3)</div>
+    </div>
+    <div class="sectionLabel">Recording</div>
+    <button id="recordBtn">RECORD</button>
+    <button id="stopRecordBtn">STOP & DOWNLOAD</button>
+    <button id="infoBtn">INFO</button>
+  </div>
+
+  <div id="infoBox">
+    <p><strong>Mammina Project</strong><br>
+    This archive blends sound and image to embody maternal presence. The spiral represents memory, while drum sounds echo heartbeat, breath, and gesture.</p>
+    <button onclick="document.getElementById('infoBox').style.display='none'">Close</button>
+  </div>
+
+  <button id="homeBtn">HOME</button>
+
+<script>
+const canvas=document.getElementById("canvas"),ctx=canvas.getContext("2d");
+const W=canvas.width,H=canvas.height;let cx=W/2,cy=H/2;let running=false;
+let images=[],positions=[],A=40,B=12,STEP=0.36,breathePhase=0,radiusFactor=1.2;
+for(let i=1;i<=30;i++){const img=new Image();img.src=`assets/mamma_photo${i}.jpg`;images.push(img);}
+function recomputeSpiral(){positions=[];let theta=0;for(let i=0;i<images.length;i++){const r=A+B*theta;positions.push({ang:theta,rbase:r,phase:Math.random()*Math.PI*2,opacity:0,x:null,y:null});theta+=STEP;}}
+function gradualLoad(){positions.forEach(p=>p.opacity=0);}
+function drawBackground(){ctx.fillStyle="#071827";ctx.fillRect(0,0,W,H);}
+function drawClock(){ctx.fillStyle="#cfe9ff";ctx.font="20px monospace";ctx.textAlign="center";ctx.fillText(new Date().toLocaleTimeString(),cx,40);}
+function draw(){
+  if(!running) return;
+  drawBackground();drawClock();
+  breathePhase+=0.01;const breathe=0.2*Math.sin(breathePhase);
+  for(let i=0;i<images.length;i++){
+    const s=positions[i];s.ang+=0.002;s.phase+=0.02;
+    const r=(s.rbase*(radiusFactor+breathe))+6*Math.sin(s.phase);
+    const x=cx+r*Math.cos(s.ang), y=cy+r*Math.sin(s.ang);
+    if(images[i].complete){
+      if(s.opacity<1) s.opacity+=0.02;
+      ctx.globalAlpha=s.opacity;
+      ctx.drawImage(images[i],x-48,y-36,96,72);
+      ctx.globalAlpha=1.0; s.x=x; s.y=y;
+    }
+  }
+  requestAnimationFrame(draw);
+}
+canvas.addEventListener("click", e=>{
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  positions.forEach((s,i)=>{
+    if(s.x && mx>s.x-48 && mx<s.x+48 && my>s.y-36 && my<s.y+36){
+      document.getElementById("preview").src=images[i].src;
+      document.getElementById("meta").textContent="Image "+(i+1);
+    }
+  });
+});
+
+// Upload new photo
+document.getElementById("uploadInput").addEventListener("change",e=>{
+  const file=e.target.files[0];
+  if(file){
+    const reader=new FileReader();
+    reader.onload=function(ev){
+      const img=new Image();
+      img.src=ev.target.result;
+      images.push(img);
+      recomputeSpiral(); gradualLoad();
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+// Sorting
+document.getElementById("sortSelect").addEventListener("change",e=>{
+  const val=e.target.value;
+  if(val==="name"){ images.sort((a,b)=>a.src.localeCompare(b.src)); }
+  else if(val==="reverse"){ images.reverse(); }
+  else if(val==="newest"){ images = images.slice(-10); }
+  recomputeSpiral(); gradualLoad();
+});
+
+// Audio context
+const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+function pulse(color){
+  ctx.beginPath(); ctx.arc(cx,cy,150,0,Math.PI*2);
+  ctx.strokeStyle=color; ctx.lineWidth=6; ctx.stroke();
+}
+
+// Drum sounds
+function playKick(){const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+  osc.type="sine"; osc.frequency.setValueAtTime(150,audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(50,audioCtx.currentTime+0.5);
+  gain.gain.setValueAtTime(0.25,audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.5);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime+0.5);
+  pulse("#ff4444"); radiusFactor+=0.2; setTimeout(()=>radiusFactor-=0.2,200);}
+function playSnare(){const buffer=audioCtx.createBuffer(1,audioCtx.sampleRate*0.2,audioCtx.sampleRate);
+  const data=buffer.getChannelData(0); for(let i=0;i<data.length;i++){data[i]=Math.random()*2-1;}
+  const noise=audioCtx.createBufferSource(); noise.buffer=buffer;
+  const gain=audioCtx.createGain(); gain.gain.setValueAtTime(0.2,audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.2);
+  noise.connect(gain).connect(audioCtx.destination);
+  noise.start(); noise.stop(audioCtx.currentTime+0.2);
+  pulse("#44ff44"); radiusFactor+=0.1; setTimeout(()=>radiusFactor-=0.1,200);}
+function playHiHat(){const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+  osc.type="square"; osc.frequency.value=8000;
+  gain.gain.setValueAtTime(0.1,audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.05);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime+0.05);
+  pulse("#4488ff"); radiusFactor+=0.05; setTimeout(()=>radiusFactor-=0.05,200);}
+
+// Drum pad + keyboard
+document.querySelectorAll(".pad").forEach(p=>{
+  p.addEventListener("click",()=>{
+    if(audioCtx.state==="suspended") audioCtx.resume();
+    if(p.dataset.sound==="kick") playKick();
+    if(p.dataset.sound==="snare") playSnare();
+    if(p.dataset.sound==="hihat") playHiHat();
+  });
+});
+document.addEventListener("keydown",e=>{
+  if(audioCtx.state==="suspended") audioCtx.resume();
+  if(e.key==="1") playKick();
+  if(e.key==="2") playSnare();
+  if(e.key==="3") playHiHat();
+});
+
+// Stem player
+const stems=[
+  {type:"sine",freq:220,slider:document.getElementById("stem1")},
+  {type:"square",freq:330,slider:document.getElementById("stem2")},
+  {type:"sawtooth",freq:440,slider:document.getElementById("stem3")},
+  {type:"triangle",freq:550,slider:document.getElementById("stem4")}
+];
+stems.forEach(s=>{
+  s.osc=audioCtx.createOscillator(); s.gain=audioCtx.createGain();
+  s.osc.type=s.type; s.osc.frequency.value=s.freq;
+  s.gain.gain.value=parseFloat(s.slider.value)*0.4;
+  s.osc.connect(s.gain).connect(audioCtx.destination);
+  s.osc.start();
+  s.slider.addEventListener("input",e=>{
+    s.gain.gain.value=parseFloat(e.target.value)*0.4;
+  });
+});
+
+// Camera snapshots + sound
+const cameraBtn=document.getElementById("cameraBtn"),
+      closeCameraBtn=document.getElementById("closeCameraBtn"),
+      cameraFeed=document.getElementById("cameraFeed");
+let cameraInterval,cameraStream;
+cameraBtn.addEventListener("click",async()=>{
+  try{
+    cameraStream=await navigator.mediaDevices.getUserMedia({video:true});
+    cameraFeed.srcObject=cameraStream; cameraFeed.style.display="block";
+    closeCameraBtn.style.display="inline-block";
+    if(cameraInterval) clearInterval(cameraInterval);
+    cameraInterval=setInterval(()=>{
+      if(cameraFeed.videoWidth>0){
+        const tempCanvas=document.createElement("canvas");
+        tempCanvas.width=cameraFeed.videoWidth; tempCanvas.height=cameraFeed.videoHeight;
+        const tctx=tempCanvas.getContext("2d"); tctx.drawImage(cameraFeed,0,0);
+        const img=new Image(); img.src=tempCanvas.toDataURL("image/png");
+        images.push(img); recomputeSpiral(); gradualLoad();
+        // brightness → sound
+        const frame=tctx.getImageData(0,0,tempCanvas.width,tempCanvas.height).data;
+        let sum=0; for(let i=0;i<frame.length;i+=4){sum+=frame[i]+frame[i+1]+frame[i+2];}
+        const avg=sum/(frame.length/4*3);
+        const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+        osc.type="triangle"; osc.frequency.value=200+avg/5;
+        gain.gain.value=0.05; osc.connect(gain).connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime+0.2);
+      }
+    },3000);
+  }catch(err){alert("Camera access failed");}
+});
+closeCameraBtn.addEventListener("click",()=>{
+  if(cameraStream){
+    cameraStream.getTracks().forEach(track=>track.stop());
+    cameraFeed.srcObject=null; cameraFeed.style.display="none";
+    closeCameraBtn.style.display="none"; clearInterval(cameraInterval);
+  }
+});
+
+// Recording
+let recorder,chunks=[];
+document.getElementById("recordBtn").addEventListener("click",()=>{
+  const dest=audioCtx.createMediaStreamDestination();
+  // connect all stems to recorder
+  stems.forEach(s=>s.gain.connect(dest));
+  recorder=new MediaRecorder(dest.stream);
+  recorder.ondataavailable=e=>chunks.push(e.data);
+  recorder.onstop=()=>{
+    const blob=new Blob(chunks,{type:"audio/webm"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download="mammina_recording.webm"; a.click();
+    chunks=[];
+  };
+  recorder.start();
+});
+document.getElementById("stopRecordBtn").addEventListener("click",()=>recorder.stop());
+
+// Info button
+document.getElementById("infoBtn").addEventListener("click",()=>{
+  document.getElementById("infoBox").style.display="block";
+});
+
+// Navigation
+const homeBtn=document.getElementById("homeBtn");
+function goHome(){
+  running=false;
+  document.getElementById("intro").style.display="flex";
+  document.getElementById("panel").style.display="none";
+  document.getElementById("stemPanel").style.display="none";
+  homeBtn.style.display="none"; ctx.clearRect(0,0,W,H);
+  if(cameraStream){
+    cameraStream.getTracks().forEach(track=>track.stop());
+    cameraFeed.srcObject=null; cameraFeed.style.display="none";
+    closeCameraBtn.style.display="none"; clearInterval(cameraInterval);
+  }
+}
+homeBtn.addEventListener("click",goHome);
+
+function enterGallery(){
+  document.getElementById("intro").style.display="none";
+  document.getElementById("panel").style.display="block";
+  document.getElementById("stemPanel").style.display="flex";
+  homeBtn.style.display="block";
+  running=true; recomputeSpiral();  running=true; 
+  recomputeSpiral(); 
+  gradualLoad(); 
+  draw();
+}
+document.getElementById("enterBtn").addEventListener("click",enterGallery);
+document.querySelector("#intro img").addEventListener("click",enterGallery);
+</script>
+</body>
+</html>
